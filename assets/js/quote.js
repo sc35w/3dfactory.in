@@ -1,6 +1,6 @@
 // 3Dfactory instant quote — STL/DXF viewer + estimate.
-// Ported from the original "Get a Quote Now" page: same technologies, materials,
-// ₹/cm³ rates and order flow (file + details → Google Apps Script → Razorpay).
+// Pricing comes from QUOTE in site_config.py. Orders go online (Google Apps Script →
+// Drive + Sheet + email) or via WhatsApp: two separate buttons.
 (function () {
   var CFG = window.QUOTE_CONFIG;
   var viewerEl = document.getElementById('viewer');
@@ -151,36 +151,67 @@
     showEstimate();
   }
 
+  // ---------- Pricing ----------
+  // price = volume (cm³) × base rate × material factor × infill factor
+  //   FDM: material factor from CFG.materials (PLA = 1); infill 20→90 % adds 0 → +20 %
+  //   DLP: resin at CFG.dlpFactor × the FDM PLA rate; solid, so no infill factor
+  function techInfo() {
+    var opt = $('technology').selectedOptions[0];
+    return { value: opt.value, tech: opt.getAttribute('data-tech'), layer: opt.getAttribute('data-layer') };
+  }
+
   function estimate() {
-    var matEl = $('material');
-    var infill = parseFloat($('infill').value || 0);
-    var costPerCm3 = parseFloat(matEl.selectedOptions[0].getAttribute('data-cost') || 0);
-    var volumeUsed = modelVolume * (infill / 100);
+    var t = techInfo();
+    var isDLP = t.tech === 'DLP';
+    var material = isDLP ? CFG.dlpMaterial : $('material').value;
+    var infill = isDLP ? null : parseFloat($('infill').value);
+    var matFactor = isDLP ? CFG.dlpFactor : CFG.materials[material];
+    var infillFactor = isDLP ? 1 : 1 + CFG.infillExtra * (infill - CFG.infillMin) / (CFG.infillMax - CFG.infillMin);
+    var rate = CFG.baseRate * matFactor * infillFactor; // ₹ per cm³ of model volume
     return {
-      tech: $('technology').value, material: matEl.value, infill: infill,
-      costPerCm3: costPerCm3, volumeUsed: volumeUsed, total: volumeUsed * costPerCm3
+      tech: t.tech, layer: t.layer, material: material,
+      infill: isDLP ? 'Solid' : infill + '%',
+      rate: rate, volume: modelVolume, total: modelVolume * rate
     };
   }
 
   var inr = function (n) { return '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
+
+  // DLP prints in resin (solid): lock material and infill accordingly
+  function syncTechnology() {
+    var isDLP = techInfo().tech === 'DLP';
+    var mat = $('material'), inf = $('infill');
+    mat.disabled = inf.disabled = isDLP;
+    mat.querySelector('[data-dlp]').hidden = !isDLP;
+    inf.querySelector('[data-dlp]').hidden = !isDLP;
+    if (isDLP) { mat.value = CFG.dlpMaterial; inf.value = 'solid'; }
+    else {
+      if (mat.value === CFG.dlpMaterial) mat.value = 'PLA';
+      if (inf.value === 'solid') inf.value = String(CFG.infillMin);
+    }
+    showEstimate();
+  }
 
   function showEstimate() {
     var e = estimate();
     $('estimate').innerHTML =
       '<dl>' +
       '<dt>Technology</dt><dd>' + e.tech + '</dd>' +
+      '<dt>Layer height</dt><dd>' + e.layer + '</dd>' +
       '<dt>Material</dt><dd>' + e.material + '</dd>' +
-      '<dt>Infill</dt><dd>' + e.infill + '%</dd>' +
-      '<dt>Volume used</dt><dd>' + e.volumeUsed.toFixed(2) + ' cm³</dd>' +
-      '<dt>Cost per cm³</dt><dd>' + inr(e.costPerCm3) + '</dd>' +
+      '<dt>Infill</dt><dd>' + e.infill + '</dd>' +
+      '<dt>Model volume</dt><dd>' + e.volume.toFixed(2) + ' cm³</dd>' +
+      '<dt>Rate</dt><dd>' + inr(e.rate) + ' / cm³</dd>' +
       '</dl>' +
-      '<div class="total"><span>Total estimated cost</span><span>' + (base.kind ? inr(e.total) : '—') + '</span></div>';
+      '<div class="total"><span>Total estimated cost</span><span>' + (base.kind === 'stl' ? inr(e.total) : '—') + '</span></div>';
   }
 
-  // ---------- Send details & pay ----------
-  // With a Google Apps Script URL configured: upload file + details there (saved to
-  // Drive/Sheet, emailed to us), then continue to Razorpay as on the original site.
-  // Without one: open WhatsApp with the details so the customer can attach the file.
+  // ---------- Submitting: two independent routes ----------
+  //  • Submit Online → Google Apps Script: model saved to Drive, row (with Drive link) in the Sheet, email to us
+  //  • Send on WhatsApp → same details as a message; on phones the model file itself is attached
+  //    via the share sheet, otherwise the Drive link from an online submission is included
+  var driveLink = '';
+
   function details() {
     var e = estimate();
     return {
@@ -190,27 +221,55 @@
       email: $('user-email').value.trim(),
       address: $('user-address').value.trim(),
       website: $('user-website').value,
-      technology: e.tech, material: e.material, infill: e.infill + '%',
+      technology: e.tech, layerHeight: e.layer, material: e.material, infill: e.infill,
       scale: (parseFloat(scaleInput.value) || 100) + '%',
       unit: document.querySelector('input[name="unit"]:checked').value,
       dimX: $('dim-x').textContent, dimY: $('dim-y').textContent, dimZ: $('dim-z').textContent,
-      volume: modelVolume.toFixed(2), total: e.total.toFixed(2)
+      volume: modelVolume.toFixed(2), rate: e.rate.toFixed(2), total: e.total.toFixed(2)
     };
   }
 
-  function whatsappText(d, file) {
-    return 'Hi 3Dfactory, I would like to order a 3D print.\n' +
-      'Name: ' + d.name + '\nPhone: ' + d.phone + (d.email ? '\nEmail: ' + d.email : '') +
-      '\nShipping address: ' + d.address +
-      '\nFile: ' + (file ? file.name : '-') +
-      '\nTechnology: ' + d.technology + ', Material: ' + d.material + ', Infill: ' + d.infill +
-      '\nSize: ' + d.dimX + ' × ' + d.dimY + ' × ' + d.dimZ + ' cm, Volume: ' + d.volume + ' cm³' +
-      '\nEstimated cost: ₹' + d.total +
-      '\n(I will attach my 3D file in this chat.)';
+  function validate(d) {
+    if (!selectedFile) { alert('Please upload your 3D model first.'); return false; }
+    if (!d.name || !d.phone || !d.address) { alert('Please fill in your name, phone number and shipping address.'); return false; }
+    return true;
   }
 
-  function openWhatsApp(d, file) {
-    window.open('https://wa.me/' + CFG.whatsapp + '?text=' + encodeURIComponent(whatsappText(d, file)), '_blank', 'noopener');
+  function whatsappText(d) {
+    return 'Hi 3Dfactory, I would like to order a 3D print.\n\n' +
+      'Name: ' + d.name + '\nPhone: ' + d.phone + (d.email ? '\nEmail: ' + d.email : '') +
+      '\nShipping address: ' + d.address +
+      '\n\nModel file: ' + selectedFile.name + (driveLink ? '\nModel link: ' + driveLink : '') +
+      '\nTechnology: ' + d.technology + '\nLayer height: ' + d.layerHeight +
+      '\nMaterial: ' + d.material + '\nInfill: ' + d.infill +
+      '\nSize: ' + d.dimX + ' × ' + d.dimY + ' × ' + d.dimZ + ' cm' +
+      '\nVolume: ' + d.volume + ' cm³' +
+      '\nEstimated price: ' + (base.kind === 'stl' ? '₹' + d.total : 'to be confirmed');
+  }
+
+  function sendWhatsApp() {
+    var d = details();
+    if (!validate(d)) return;
+    var text = whatsappText(d);
+    var url = 'https://wa.me/' + CFG.whatsapp + '?text=' + encodeURIComponent(text);
+    // Phones: share the actual model file + details (the customer picks WhatsApp in the share sheet)
+    var shareFile = new File([selectedFile], selectedFile.name, { type: 'application/octet-stream' });
+    var mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if (mobile && navigator.canShare && navigator.canShare({ files: [shareFile] })) {
+      navigator.share({ files: [shareFile], text: text }).catch(function (err) {
+        if (err && err.name !== 'AbortError') window.open(url, '_blank', 'noopener');
+      });
+      return;
+    }
+    window.open(url, '_blank', 'noopener');
+    if (!driveLink) setStatus('WhatsApp opened with your details. Please attach your model file (' + selectedFile.name + ') in the chat before sending.', 'info');
+  }
+
+  function setStatus(html, kind) {
+    var el = $('submit-status');
+    el.className = 'submit-status ' + (kind || '');
+    el.innerHTML = html;
+    el.hidden = !html;
   }
 
   function readBase64(file) {
@@ -222,40 +281,38 @@
     });
   }
 
-  function sendDetailsAndRedirect() {
+  function submitOnline() {
     var d = details();
-    var file = selectedFile;
-    if (!d.name || !d.phone || !d.address || !file) {
-      alert('Please upload your 3D file and fill in your name, phone number and shipping address.');
+    if (!validate(d)) return;
+    if (!CFG.appsScriptUrl) {
+      setStatus('Online submission is not available right now. Please use <strong>Send on WhatsApp</strong>.', 'error');
       return;
     }
-    if (!CFG.appsScriptUrl) { openWhatsApp(d, file); return; }
-    if (file.size > CFG.maxFileMB * 1024 * 1024) {
-      alert('Your file is larger than ' + CFG.maxFileMB + ' MB. Please send it to us on WhatsApp instead.');
-      openWhatsApp(d, file);
+    if (selectedFile.size > CFG.maxFileMB * 1024 * 1024) {
+      setStatus('Your file is larger than ' + CFG.maxFileMB + ' MB. Please use <strong>Send on WhatsApp</strong> instead.', 'error');
       return;
     }
-    var btn = $('send-details');
+    var btn = $('submit-online');
     btn.disabled = true; btn.textContent = 'Uploading…';
-    var reset = function () { btn.disabled = false; btn.textContent = 'Send Details and Pay Now'; };
-
-    readBase64(file)
+    setStatus('');
+    readBase64(selectedFile)
       .then(function (data) {
-        d.file = { name: file.name, data: data };
+        d.file = { name: selectedFile.name, data: data };
         // text/plain keeps this a "simple" request, which Apps Script accepts cross-origin
         return fetch(CFG.appsScriptUrl, { method: 'POST', body: JSON.stringify(d) });
       })
       .then(function (res) { return res.json(); })
       .then(function (res) {
         if (!res.ok) throw new Error(res.error || 'Upload failed');
-        alert('Details and file uploaded successfully! Taking you to payment.');
-        window.location.href = CFG.razorpay;
+        driveLink = res.fileUrl || '';
+        setStatus('<strong>Submitted!</strong> We have received your model and details and will confirm your order shortly.' +
+          '<a class="btn btn-dark btn-block" href="' + CFG.razorpay + '" target="_blank" rel="noopener">Pay now via Razorpay</a>', 'ok');
       })
       .catch(function (err) {
         console.error(err);
-        reset();
-        if (confirm('Sorry, we could not upload your file. Send your details on WhatsApp instead?')) openWhatsApp(d, file);
-      });
+        setStatus('Sorry, we could not upload your file. Please try again or use <strong>Send on WhatsApp</strong>.', 'error');
+      })
+      .then(function () { btn.disabled = false; btn.textContent = 'Submit Online'; });
   }
 
   // ---------- Wire up ----------
@@ -277,7 +334,9 @@
   });
   scaleInput.addEventListener('input', applyScale);
   document.querySelectorAll('input[name="unit"]').forEach(function (r) { r.addEventListener('change', applyScale); });
-  ['technology', 'material', 'infill'].forEach(function (id) { $(id).addEventListener('change', showEstimate); });
-  $('send-details').addEventListener('click', sendDetailsAndRedirect);
-  showEstimate();
+  $('technology').addEventListener('change', syncTechnology);
+  ['material', 'infill'].forEach(function (id) { $(id).addEventListener('change', showEstimate); });
+  $('submit-online').addEventListener('click', submitOnline);
+  $('send-whatsapp').addEventListener('click', sendWhatsApp);
+  syncTechnology();
 })();

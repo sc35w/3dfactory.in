@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Instant Quote &amp; Order – Upload STL | 3Dfactory</title>
-<meta name="description" content="Upload your STL or DXF model, choose FDM, SLA or SLS, PLA, ABS, resin or TPU and infill, and get an instant 3D printing price estimate.">
+<meta name="description" content="Upload your STL or DXF model, choose FDM or DLP, layer height, PLA, PETG, ABS or TPU and infill, and get an instant 3D printing price estimate.">
 <link rel="canonical" href="https://3dfactory.in/get-a-quote-now/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="3Dfactory">
 <meta property="og:title" content="Instant Quote &amp; Order – Upload STL | 3Dfactory">
-<meta property="og:description" content="Upload your STL or DXF model, choose FDM, SLA or SLS, PLA, ABS, resin or TPU and infill, and get an instant 3D printing price estimate.">
+<meta property="og:description" content="Upload your STL or DXF model, choose FDM or DLP, layer height, PLA, PETG, ABS or TPU and infill, and get an instant 3D printing price estimate.">
 <meta property="og:url" content="https://3dfactory.in/get-a-quote-now/">
 <meta property="og:image" content="https://3dfactory.in/assets/img/3d-printing-services.webp">
 <meta name="theme-color" content="#0f172a">
@@ -71,24 +71,15 @@
         <div class="panel-head"><div class="step-head"><span class="step-num purple">2</span><h2>Customize print settings</h2></div></div>
         <div class="panel-body stack">
           <div class="field"><label for="technology">Technology</label>
-            <select id="technology">
-              <option value="FDM">FDM - (Layer Height 0.1MM)</option>
-              <option value="SLA">SLA - (High Detail)</option>
-              <option value="SLS">SLS - (Nylon)</option>
-            </select></div>
+            <select id="technology"><option value="FDM-0.1" data-tech="FDM" data-layer="0.1 mm">FDM 0.1 mm</option><option value="FDM-0.2" data-tech="FDM" data-layer="0.2 mm">FDM 0.2 mm</option><option value="FDM-0.3" data-tech="FDM" data-layer="0.3 mm">FDM 0.3 mm</option><option value="FDM-0.4" data-tech="FDM" data-layer="0.4 mm">FDM 0.4 mm</option><option value="DLP-0.1" data-tech="DLP" data-layer="0.1 mm">DLP 0.1 mm</option></select></div>
           <div class="field"><label for="material">Material</label>
-            <select id="material">
-              <option value="PLA" data-cost="2">PLA</option>
-              <option value="ABS" data-cost="2.5">ABS</option>
-              <option value="Resin" data-cost="6">Resin</option>
-              <option value="TPU" data-cost="4">TPU</option>
-            </select></div>
+            <select id="material"><option value="PLA">PLA</option><option value="PETG">PETG</option><option value="ABS">ABS</option><option value="TPU">TPU</option><option value="Resin" data-dlp hidden>Resin (DLP)</option></select></div>
           <div class="field"><label for="infill">Infill</label>
-            <select id="infill"><option value="10">10%</option><option value="20" selected>20%</option><option value="30">30%</option><option value="40">40%</option><option value="50">50%</option><option value="60">60%</option><option value="70">70%</option><option value="80">80%</option><option value="90">90%</option><option value="100">100%</option></select></div>
+            <select id="infill"><option value="20">20%</option><option value="30">30%</option><option value="40">40%</option><option value="50">50%</option><option value="60">60%</option><option value="70">70%</option><option value="80">80%</option><option value="90">90%</option><option value="solid" data-dlp hidden>Solid (resin)</option></select></div>
         </div>
       </div>
       <div class="panel">
-        <div class="panel-head"><div class="step-head"><span class="step-num green">3</span><h2>Finalize &amp; pay</h2></div></div>
+        <div class="panel-head"><div class="step-head"><span class="step-num green">3</span><h2>Your details &amp; order</h2></div></div>
         <div class="panel-body stack">
           <div class="estimate" id="estimate"></div>
           <div class="field"><label for="user-name">Your Name</label><input type="text" id="user-name" required autocomplete="name"></div>
@@ -96,9 +87,10 @@
           <div class="field"><label for="user-email">Email <span class="muted" style="font-weight:400">(optional)</span></label><input type="email" id="user-email" autocomplete="email"></div>
           <div class="field"><label for="user-address">Shipping Address</label><textarea id="user-address" required autocomplete="street-address" style="min-height:90px"></textarea></div>
           <input type="text" id="user-website" tabindex="-1" autocomplete="off" aria-hidden="true" class="sr-only">
-          <button type="button" class="btn btn-red btn-block" id="send-details"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.5 14.4c-.3-.1-1.8-.9-2-1s-.5-.1-.7.1-.8 1-1 1.2-.4.2-.7.1a8 8 0 0 1-2.4-1.5 9 9 0 0 1-1.6-2c-.2-.3 0-.5.1-.6l.5-.5.3-.5a.6.6 0 0 0 0-.5l-.9-2.2c-.2-.6-.5-.5-.7-.5h-.6a1.1 1.1 0 0 0-.8.4 3.4 3.4 0 0 0-1 2.5 5.9 5.9 0 0 0 1.2 3.1 13.5 13.5 0 0 0 5.2 4.6c1.9.8 2.7.9 3.6.7a3.1 3.1 0 0 0 2-1.4 2.5 2.5 0 0 0 .2-1.4c-.1-.1-.3-.2-.6-.3zM12 21.8a9.8 9.8 0 0 1-5-1.4l-.4-.2-3.7 1 1-3.6-.2-.4A9.8 9.8 0 1 1 12 21.8zm8.4-18.2A11.8 11.8 0 0 0 1.8 17.8L.1 24l6.4-1.7A11.8 11.8 0 0 0 12 23.7 11.8 11.8 0 0 0 20.4 3.6z"/></svg> Send Details on WhatsApp</button>
-          <a class="btn btn-whatsapp btn-block" href="https://wa.me/918296548156?text=Hi%203Dfactory%2C%20I%20need%20help%20with%20a%203D%20printing%20quote." target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.5 14.4c-.3-.1-1.8-.9-2-1s-.5-.1-.7.1-.8 1-1 1.2-.4.2-.7.1a8 8 0 0 1-2.4-1.5 9 9 0 0 1-1.6-2c-.2-.3 0-.5.1-.6l.5-.5.3-.5a.6.6 0 0 0 0-.5l-.9-2.2c-.2-.6-.5-.5-.7-.5h-.6a1.1 1.1 0 0 0-.8.4 3.4 3.4 0 0 0-1 2.5 5.9 5.9 0 0 0 1.2 3.1 13.5 13.5 0 0 0 5.2 4.6c1.9.8 2.7.9 3.6.7a3.1 3.1 0 0 0 2-1.4 2.5 2.5 0 0 0 .2-1.4c-.1-.1-.3-.2-.6-.3zM12 21.8a9.8 9.8 0 0 1-5-1.4l-.4-.2-3.7 1 1-3.6-.2-.4A9.8 9.8 0 1 1 12 21.8zm8.4-18.2A11.8 11.8 0 0 0 1.8 17.8L.1 24l6.4-1.7A11.8 11.8 0 0 0 12 23.7 11.8 11.8 0 0 0 20.4 3.6z"/></svg> Need help? Chat on WhatsApp</a>
-          <p class="note" style="margin:0">Prices are estimates and are confirmed after we review your file.</p>
+          <button type="button" class="btn btn-red btn-block" id="submit-online"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></svg> Submit Online</button>
+          <button type="button" class="btn btn-whatsapp btn-block" id="send-whatsapp"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.5 14.4c-.3-.1-1.8-.9-2-1s-.5-.1-.7.1-.8 1-1 1.2-.4.2-.7.1a8 8 0 0 1-2.4-1.5 9 9 0 0 1-1.6-2c-.2-.3 0-.5.1-.6l.5-.5.3-.5a.6.6 0 0 0 0-.5l-.9-2.2c-.2-.6-.5-.5-.7-.5h-.6a1.1 1.1 0 0 0-.8.4 3.4 3.4 0 0 0-1 2.5 5.9 5.9 0 0 0 1.2 3.1 13.5 13.5 0 0 0 5.2 4.6c1.9.8 2.7.9 3.6.7a3.1 3.1 0 0 0 2-1.4 2.5 2.5 0 0 0 .2-1.4c-.1-.1-.3-.2-.6-.3zM12 21.8a9.8 9.8 0 0 1-5-1.4l-.4-.2-3.7 1 1-3.6-.2-.4A9.8 9.8 0 1 1 12 21.8zm8.4-18.2A11.8 11.8 0 0 0 1.8 17.8L.1 24l6.4-1.7A11.8 11.8 0 0 0 12 23.7 11.8 11.8 0 0 0 20.4 3.6z"/></svg> Send on WhatsApp</button>
+          <div class="submit-status" id="submit-status" role="status" hidden></div>
+          <p class="note" style="margin:0"><strong>Submit Online</strong> uploads your model and details to us. <strong>Send on WhatsApp</strong> sends the same details in a chat (on phones, your model file is attached). Prices are estimates and are confirmed after we review your file.</p>
         </div>
       </div>
     </div>
@@ -152,7 +144,7 @@
   <a class="fab-quote" href="../get-a-quote-now/" aria-label="Get Quote"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg><span>Get Quote</span></a>
 </div>
 <script src="../assets/js/main.js" defer></script>
-<script>window.QUOTE_CONFIG = {"appsScriptUrl": "", "razorpay": "https://razorpay.me/@3Dfactory", "whatsapp": "918296548156", "maxFileMB": 20};</script>
+<script>window.QUOTE_CONFIG = {"appsScriptUrl": "", "razorpay": "https://razorpay.me/@3Dfactory", "whatsapp": "918296548156", "maxFileMB": 20, "baseRate": 10.0, "technologies": [["FDM-0.1", "FDM", "0.1 mm"], ["FDM-0.2", "FDM", "0.2 mm"], ["FDM-0.3", "FDM", "0.3 mm"], ["FDM-0.4", "FDM", "0.4 mm"], ["DLP-0.1", "DLP", "0.1 mm"]], "materials": {"PLA": 1.0, "PETG": 1.15, "ABS": 1.1, "TPU": 2.2}, "dlpMaterial": "Resin", "dlpFactor": 3.0, "infillMin": 20, "infillMax": 90, "infillStep": 10, "infillExtra": 0.2};</script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
