@@ -1,6 +1,6 @@
 // 3Dfactory instant quote — STL/DXF viewer + estimate.
 // Ported from the original "Get a Quote Now" page: same technologies, materials,
-// ₹/cm³ rates and order flow (Supabase file upload → EmailJS → Razorpay).
+// ₹/cm³ rates and order flow (file + details → Google Apps Script → Razorpay).
 (function () {
   var CFG = window.QUOTE_CONFIG;
   var viewerEl = document.getElementById('viewer');
@@ -177,54 +177,89 @@
       '<div class="total"><span>Total estimated cost</span><span>' + (base.kind ? inr(e.total) : '—') + '</span></div>';
   }
 
-  // ---------- Send details & pay (original flow) ----------
+  // ---------- Send details & pay ----------
+  // With a Google Apps Script URL configured: upload file + details there (saved to
+  // Drive/Sheet, emailed to us), then continue to Razorpay as on the original site.
+  // Without one: open WhatsApp with the details so the customer can attach the file.
+  function details() {
+    var e = estimate();
+    return {
+      type: 'instant',
+      name: $('user-name').value.trim(),
+      phone: $('user-phone').value.trim(),
+      email: $('user-email').value.trim(),
+      address: $('user-address').value.trim(),
+      website: $('user-website').value,
+      technology: e.tech, material: e.material, infill: e.infill + '%',
+      scale: (parseFloat(scaleInput.value) || 100) + '%',
+      unit: document.querySelector('input[name="unit"]:checked').value,
+      dimX: $('dim-x').textContent, dimY: $('dim-y').textContent, dimZ: $('dim-z').textContent,
+      volume: modelVolume.toFixed(2), total: e.total.toFixed(2)
+    };
+  }
+
+  function whatsappText(d, file) {
+    return 'Hi 3Dfactory, I would like to order a 3D print.\n' +
+      'Name: ' + d.name + '\nPhone: ' + d.phone + (d.email ? '\nEmail: ' + d.email : '') +
+      '\nShipping address: ' + d.address +
+      '\nFile: ' + (file ? file.name : '-') +
+      '\nTechnology: ' + d.technology + ', Material: ' + d.material + ', Infill: ' + d.infill +
+      '\nSize: ' + d.dimX + ' × ' + d.dimY + ' × ' + d.dimZ + ' cm, Volume: ' + d.volume + ' cm³' +
+      '\nEstimated cost: ₹' + d.total +
+      '\n(I will attach my 3D file in this chat.)';
+  }
+
+  function openWhatsApp(d, file) {
+    window.open('https://wa.me/' + CFG.whatsapp + '?text=' + encodeURIComponent(whatsappText(d, file)), '_blank', 'noopener');
+  }
+
+  function readBase64(file) {
+    return new Promise(function (resolve, reject) {
+      var r = new FileReader();
+      r.onload = function () { resolve(String(r.result).split(',')[1]); };
+      r.onerror = reject;
+      r.readAsDataURL(file);
+    });
+  }
+
   function sendDetailsAndRedirect() {
-    var name = $('user-name').value.trim();
-    var address = $('user-address').value.trim();
+    var d = details();
     var file = selectedFile;
-    if (!name || !address || !file) {
-      alert('Please fill in your name, address and upload an STL file.');
+    if (!d.name || !d.phone || !d.address || !file) {
+      alert('Please upload your 3D file and fill in your name, phone number and shipping address.');
+      return;
+    }
+    if (!CFG.appsScriptUrl) { openWhatsApp(d, file); return; }
+    if (file.size > CFG.maxFileMB * 1024 * 1024) {
+      alert('Your file is larger than ' + CFG.maxFileMB + ' MB. Please send it to us on WhatsApp instead.');
+      openWhatsApp(d, file);
       return;
     }
     var btn = $('send-details');
-    btn.disabled = true; btn.textContent = 'Sending…';
+    btn.disabled = true; btn.textContent = 'Uploading…';
     var reset = function () { btn.disabled = false; btn.textContent = 'Send Details and Pay Now'; };
 
-    var e = estimate();
-    var supabase = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseKey);
-    var path = 'stl-files/' + Date.now() + '_' + file.name;
-    supabase.storage.from('uploads').upload(path, file, { contentType: 'application/sla' })
-      .then(function (res) {
-        if (res.error) throw res.error;
-        var publicUrl = supabase.storage.from('uploads').getPublicUrl(path).data.publicUrl;
-        return emailjs.send(CFG.emailService, CFG.emailTemplate, {
-          name: name,
-          address: address,
-          technology: e.tech,
-          material: e.material,
-          infill: e.infill + '%',
-          totalCost: e.total.toFixed(2),
-          dimension_x: $('dim-x').textContent + ' cm',
-          dimension_y: $('dim-y').textContent + ' cm',
-          dimension_z: $('dim-z').textContent + ' cm',
-          volume_cm3: modelVolume.toFixed(2) + ' cm³',
-          stl_link: publicUrl
-        });
+    readBase64(file)
+      .then(function (data) {
+        d.file = { name: file.name, data: data };
+        // text/plain keeps this a "simple" request, which Apps Script accepts cross-origin
+        return fetch(CFG.appsScriptUrl, { method: 'POST', body: JSON.stringify(d) });
       })
-      .then(function () {
+      .then(function (res) { return res.json(); })
+      .then(function (res) {
+        if (!res.ok) throw new Error(res.error || 'Upload failed');
         alert('Details and file uploaded successfully! Taking you to payment.');
         window.location.href = CFG.razorpay;
       })
       .catch(function (err) {
         console.error(err);
-        alert('Sorry, we could not send your details. Please try again, or send your file to us on WhatsApp.');
         reset();
+        if (confirm('Sorry, we could not upload your file. Send your details on WhatsApp instead?')) openWhatsApp(d, file);
       });
   }
 
   // ---------- Wire up ----------
   initScene();
-  if (window.emailjs) emailjs.init(CFG.emailUser);
   viewerEl.addEventListener('click', function () { fileInput.click(); });
   $('upload-model').addEventListener('click', function () { fileInput.click(); });
   fileInput.addEventListener('change', function () { if (fileInput.files.length) handleFile(fileInput.files[0]); });
